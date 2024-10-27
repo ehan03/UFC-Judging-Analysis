@@ -14,7 +14,7 @@ fighter_tott <- read.csv("./data/UFC Stats/raw/ufc_fighter_tott.csv")
 
 # Read in data I manually inputted to address missing/poorly managed data
 edge_case_fighters_map <- read.csv("./data/UFC Stats/hotfixes/edge_case_fighters_map.csv")
-
+missing_bouts <- read.csv("./data/UFC Stats/hotfixes/missing_bouts.csv")
 
 # Clean event details
 events <- event_details %>%
@@ -262,9 +262,49 @@ round_stats_unavailable <- fight_results_clean %>%
   pull(id)
 round_stats_unavailable
 
+# Sanity check that we don't have any missing rounds
+rounds_comparison <- fight_results_clean %>%
+  filter(!id %in% round_stats_unavailable) %>%
+  select(id, end_round) %>%
+  full_join(fight_stats_clean %>%
+              count(id) %>%
+              mutate(num_rounds = n / 2) %>%
+              select(id, num_rounds),
+            by = join_by(id), suffix = c("", ""))
+sum(is.na(rounds_comparison))
+all(rounds_comparison$end_round == rounds_comparison$num_rounds)
 
+# Results and stats data is missing two events entirely for some reason
+# We will need to manually record and append this data
+events %>%
+  filter(!id %in% fight_results_clean$event_id)
 
+bouts <- fight_results_clean %>%
+  select(-c(event_name, bout_name, red_fighter_name, blue_fighter_name)) %>%
+  bind_rows(missing_bouts) %>%
+  group_by(event_id) %>%
+  mutate(bout_order = row_number()) %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  left_join(events %>%
+              mutate(event_order = row_number()) %>%
+              select(id, event_order),
+            by = join_by(event_id == id), suffix = c("", "")) %>%
+  arrange(event_order, desc(bout_order)) %>%
+  select(-c(event_order, bout_order))
+
+# bouts_stats_by_round <- fight_stats_clean %>%
+#   bind_rows() %>%
+#   left_join(bouts %>%
+#               mutate(bout_order = row_number()) %>%
+#               select(id, bout_order),
+#             by = join_by(id), suffix = c("", "")) %>%
+#   arrange(bout_order) %>%
+#   select(-bout_order)
 
 
 # Save all dataframes to disk
-# saveRDS(fighters, "./data/UFC Stats/clean/fighters.rds")
+# saveRDS(events, "./data/UFC Stats/events.rds")
+# saveRDS(fighters, "./data/UFC Stats/fighters.rds")
+# saveRDS(bouts, "./data/UFC Stats/bouts.rds")
+# saveRDS(bouts_stats_by_round, "./data/UFC Stats/bouts_stats_by_round.rds")

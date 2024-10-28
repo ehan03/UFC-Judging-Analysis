@@ -15,6 +15,8 @@ fighter_tott <- read.csv("./data/UFC Stats/raw/ufc_fighter_tott.csv")
 # Read in data I manually inputted to address missing/poorly managed data
 edge_case_fighters_map <- read.csv("./data/UFC Stats/hotfixes/edge_case_fighters_map.csv")
 missing_bouts <- read.csv("./data/UFC Stats/hotfixes/missing_bouts.csv")
+missing_bouts_stats_by_round <- read.csv("./data/UFC Stats/hotfixes/missing_bouts_stats_by_round.csv")
+
 
 # Clean event details
 events <- event_details %>%
@@ -293,18 +295,18 @@ bouts <- fight_results_clean %>%
   arrange(event_order, desc(bout_order)) %>%
   select(-c(event_order, bout_order))
 
-# bouts_stats_by_round <- fight_stats_clean %>%
-#   bind_rows() %>%
-#   left_join(bouts %>%
-#               mutate(bout_order = row_number()) %>%
-#               select(id, bout_order),
-#             by = join_by(id), suffix = c("", "")) %>%
-#   arrange(bout_order) %>%
-#   select(-bout_order)
+bouts_stats_by_round <- fight_stats_clean %>%
+  bind_rows(missing_bouts_stats_by_round) %>%
+  left_join(bouts %>%
+              mutate(bout_order = row_number()) %>%
+              select(id, bout_order),
+            by = join_by(id), suffix = c("", "")) %>%
+  arrange(bout_order) %>%
+  select(-bout_order)
 
 
 # Save all dataframes to disk
-# saveRDS(events, "./data/UFC Stats/events.rds")
-# saveRDS(fighters, "./data/UFC Stats/fighters.rds")
-# saveRDS(bouts, "./data/UFC Stats/bouts.rds")
-# saveRDS(bouts_stats_by_round, "./data/UFC Stats/bouts_stats_by_round.rds")
+saveRDS(events, "./data/UFC Stats/events.rds")
+saveRDS(fighters, "./data/UFC Stats/fighters.rds")
+saveRDS(bouts, "./data/UFC Stats/bouts.rds")
+saveRDS(bouts_stats_by_round, "./data/UFC Stats/bouts_stats_by_round.rds")

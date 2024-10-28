@@ -102,6 +102,8 @@ fighters <- fighter_tott_clean %>%
 fight_results_clean <- fight_results %>%
   mutate(id = sapply(strsplit(URL, "/"), tail, 1)) %>%
   mutate(EVENT = str_trim(EVENT)) %>%
+  
+  # Join on events to get corresponding event id
   left_join(events %>% 
               rename(event_id = id) %>% 
               select(event_id, name), 
@@ -109,8 +111,14 @@ fight_results_clean <- fight_results %>%
   rename(event_name = EVENT) %>%
   mutate(BOUT = gsub("  ", " ", str_trim(BOUT))) %>%
   mutate(bout_name = BOUT) %>%
+  
+  # Extract fighters' names in red and blue corners
   separate(BOUT, into = c("red_fighter_name", "blue_fighter_name"), 
            sep = " vs. ") %>%
+  
+  # Join on fighters dataframe to get fighter ids
+  # Restrict to unique names to avoid faulty many-to-many relationships
+  # We also consider some edge cases where fighter names changed over time
   left_join(fighters %>% 
               group_by(name) %>%
               filter(n() == 1) %>%
@@ -129,6 +137,8 @@ fight_results_clean <- fight_results %>%
               bind_rows(edge_case_fighters_map %>%
                         rename(blue_fighter_id = id)),
             by = join_by(blue_fighter_name == name), suffix = c("", "")) %>%
+  
+  # Handle the two fighters named Bruno Silva
   mutate(red_fighter_id = ifelse((red_fighter_name == "Bruno Silva") & 
                                  (id %in% c("94541dd979e0b4bd", 
                                             "c3af2b6ab1262fef",
@@ -153,6 +163,8 @@ fight_results_clean <- fight_results %>%
   mutate(blue_fighter_id = ifelse((blue_fighter_name == "Bruno Silva") &
                                   (is.na(blue_fighter_id)),
                                   "12ebd7d157e91701", blue_fighter_id)) %>%
+  
+  # Rename rest of columns for consistency
   rename(bout_type = WEIGHTCLASS) %>%
   mutate(red_outcome = sapply(strsplit(OUTCOME, "/"), head, 1)) %>%
   rename(outcome_method = METHOD) %>%
@@ -167,7 +179,7 @@ fight_results_clean <- fight_results %>%
          round_time_format, referee)
 
 
-
+# Function to convert strings like "3:20" into seconds (numeric)
 convert_time <- function(time_str) {
   if (is.na(time_str)) { 
     return(NA) 
@@ -186,8 +198,11 @@ convert_time <- function(time_str) {
   return(total_seconds)
 }
 
+# Clean fight statistics by round
 fight_stats_clean <- fight_stats %>%
   filter(ROUND != "") %>%
+  
+  # Join with cleaned fight results to extract fighter ids
   left_join(fight_results_clean %>%
               select(id, event_name, red_fighter_id, red_fighter_name, 
                      bout_name) %>%
@@ -202,6 +217,8 @@ fight_stats_clean <- fight_stats %>%
             by = join_by(EVENT == event_name, BOUT == bout_name, 
                          FIGHTER == fighter_name),
             suffix = c("", "")) %>%
+  
+  # Handle edge case where both fighters fought each other twice in one night
   mutate(fighter_id = ifelse((is.na(fighter_id)) & 
                              (FIGHTER == "Kazushi Sakuraba"),
                              "9b5b5a75523728f3", fighter_id)) %>%
@@ -211,6 +228,10 @@ fight_stats_clean <- fight_stats %>%
   mutate(id = ifelse((is.na(id)) & (SIG.STR. == "1 of 2"), 
                      "ec1bda9a4c2aab42", id)) %>%
   mutate(id = ifelse(is.na(id), "2750ac5854e8b28b", id)) %>%
+  
+  # Clean and rename columns for consistency
+  # Bulk of this is separating different strikes and takedowns landed/attempted
+  # into separate columns
   mutate(round = as.numeric(gsub("Round ", "", ROUND))) %>%
   rename(knockdowns_scored = KD) %>%
   separate(SIG.STR., into = c("sig_strikes_landed", "sig_strikes_attempted"), 
@@ -236,6 +257,8 @@ fight_stats_clean <- fight_stats %>%
                             "sig_strikes_clinch_attempted"), sep = " of ") %>%
   separate(GROUND, into = c("sig_strikes_ground_landed",
                             "sig_strikes_ground_attempted"), sep = " of ") %>%
+  
+  # Make sure derived landed/attempted columns are numeric
   mutate(across(c(sig_strikes_landed, sig_strikes_attempted,
                   total_strikes_landed, total_strikes_attempted, 
                   takedowns_landed, takedowns_attempted, 
@@ -281,6 +304,8 @@ all(rounds_comparison$end_round == rounds_comparison$num_rounds)
 events %>%
   filter(!id %in% fight_results_clean$event_id)
 
+# Create final bouts dataframe combining `fight_results_clean` with manually
+# collected data for missing fights
 bouts <- fight_results_clean %>%
   select(-c(event_name, bout_name, red_fighter_name, blue_fighter_name)) %>%
   bind_rows(missing_bouts) %>%
@@ -295,6 +320,8 @@ bouts <- fight_results_clean %>%
   arrange(event_order, desc(bout_order)) %>%
   select(-c(event_order, bout_order))
 
+# Create final bouts stats dataframe combining `fight_stats_clean` with manually
+# collected data for missing fights
 bouts_stats_by_round <- fight_stats_clean %>%
   bind_rows(missing_bouts_stats_by_round) %>%
   left_join(bouts %>%

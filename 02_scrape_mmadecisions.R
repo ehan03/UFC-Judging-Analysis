@@ -1,6 +1,7 @@
 # Load libraries
 library(rvest)
 library(polite)
+library(svMisc)
 library(tidyverse)
 
 # Initialize polite session with home URL
@@ -39,22 +40,9 @@ get_event_urls <- function(year, bow = base_session) {
   return(ufc_urls)
 }
 
-# Grab bout URLs based on event URL
-get_bout_urls <- function(event_url, bow = base_session) {
-  session <- nod(bow = bow, path = event_url)
-}
-
-# Grab fighter URLs based on bout URL
-get_fighter_urls <- function(bout_url, bow = base_session) {
-  session <- nod(bow = bow, path = bout_url)
-}
-
 # Get event metadata to be used to map to UFC Stats data
-get_event_details <- function(event_url, bow = base_session) {
-  session <- nod(bow = bow, path = event_url)
-  scraped_page <- scrape(session)
-  
-  event_details <- scraped_page %>%
+get_event_details <- function(event_url, scraped_event_page) {
+  event_info <- scraped_event_page %>%
     html_node("tr.top-row > td") %>%
     html_text(trim = TRUE) %>%
     str_split("\n") %>%
@@ -62,22 +50,171 @@ get_event_details <- function(event_url, bow = base_session) {
     str_trim()
   
   event_id <- as.numeric(unlist(str_split(event_url, "/"))[2])
-  event_name <- event_details[1]
-  venue <- event_details[2]
-  city <- paste(head(strsplit(event_details[3], ", ")[[1]], -1), 
+  event_name <- event_info[1]
+  venue <- event_info[2]
+  city <- paste(head(str_split(event_info[3], ", ")[[1]], -1), 
                 collapse = ", ")
-  country <- tail(strsplit(event_details[3], ", ")[[1]], 1)
-  date <- as.Date(scraped_page %>% 
+  country <- tail(str_split(event_info[3], ", ")[[1]], 1)
+  date <- as.Date(scraped_event_page %>% 
                     html_node("tr.bottom-row > td.decision-bottom2") %>% 
                     html_text(trim = TRUE), 
                   format = "%B %d, %Y")
   
-  return(data.frame(id = event_id, name = event_name, date = date, 
-                    venue = venue, city = city, country = country))
+  event_df <- data.frame(id = event_id, name = event_name, date = date,
+                         venue = venue, city = city, country = country)
+  
+  return(event_df)
 }
 
 # Get bout metadata
+get_bout_details <- function(bout_url, scraped_bout_page) {
+  bout_id <- as.numeric(unlist(str_split(bout_url, "/"))[2])
+  
+  event_url <- scraped_bout_page %>% 
+    html_node("tr.top-row > td.decision-top2 > b > a") %>% 
+    html_attr("href")
+  event_id <- as.numeric(unlist(str_split(event_url, "/"))[2])
+  
+  fighter1_url <- scraped_bout_page %>% 
+    html_node("tr.top-row > td.decision-top > a") %>% 
+    html_attr("href")
+  fighter2_url <- scraped_bout_page %>% 
+    html_node("tr.bottom-row > td.decision-bottom > a") %>% 
+    html_attr("href")
+  fighter1_id <- as.numeric(unlist(str_split(fighter1_url, "/"))[2])
+  fighter2_id <- as.numeric(unlist(str_split(fighter2_url, "/"))[2])
+  
+  bout_df <- data.frame(id = bout_id, event_id = event_id, 
+                        fighter1_id = fighter1_id, fighter2_id = fighter2_id)
+  
+  return(bout_df)
+}
+
+# Get bout scores by round
+get_bout_scores <- function(bout_url, scraped_bout_page) {
+  bout_id <- as.numeric(unlist(str_split(bout_url, "/"))[2])
+  
+  judge_urls <- scraped_bout_page %>%
+    html_nodes("tr.top-row > td.judge > a") %>%
+    html_attr("href")
+  judge_ids <- sapply(str_split(judge_urls, "/"), function(x) as.numeric(x[2]))
+  stopifnot(length(judge_ids) == 3)
+  
+  fighter1_url <- scraped_bout_page %>% 
+    html_node("tr.top-row > td.decision-top > a") %>% 
+    html_attr("href")
+  fighter2_url <- scraped_bout_page %>% 
+    html_node("tr.bottom-row > td.decision-bottom > a") %>% 
+    html_attr("href")
+  fighter1_id <- as.numeric(unlist(str_split(fighter1_url, "/"))[2])
+  fighter2_id <- as.numeric(unlist(str_split(fighter2_url, "/"))[2])
+  
+  score_info <- scraped_bout_page %>% 
+    html_nodes("table > tr > td > table > tr.decision > td.list") %>% 
+    html_text(trim = TRUE)
+  stopifnot(length(score_info) %in% c(27, 45))
+  
+  score_info <- na_if(score_info, "-")
+  num_rounds <- length(score_info) / 9
+  rounds <- as.numeric(score_info[seq_along(score_info) %% 3 == 1])
+  fighter1_scores <- as.numeric(score_info[seq_along(score_info) %% 3 == 2])
+  fighter2_scores <- as.numeric(score_info[seq_along(score_info) %% 3 == 0])
+  
+  bout_scores_df <- data.frame(id = bout_id, round = rep(rounds, 2),
+                               fighter_id = c(rep(fighter1_id, num_rounds * 3), 
+                                              rep(fighter2_id, num_rounds * 3)),
+                               judge_id = rep(c(rep(judge_ids[1], num_rounds),
+                                                rep(judge_ids[2], num_rounds),
+                                                rep(judge_ids[3], num_rounds)), 
+                                              2),
+                               score = c(fighter1_scores, fighter2_scores))
+  
+  return(bout_scores_df)
+}
+
+# Get judge info
+get_judge_details <- function(scraped_bout_page) {
+  judge_urls <- scraped_bout_page %>%
+    html_nodes("tr.top-row > td.judge > a") %>%
+    html_attr("href")
+  judge_names <- scraped_bout_page %>%
+    html_nodes("tr.top-row > td.judge > a") %>%
+    html_text(trim = TRUE)
+  
+  judge_ids <- sapply(str_split(judge_urls, "/"), function(x) as.numeric(x[2]))
+  judge_df <- data.frame(id = judge_ids, name = judge_names)
+  
+  return(judge_df)
+}
+
+# Get fighter details
+get_fighter_details <- function(fighter_url, scraped_fighter_page) {
+  fighter_id <- as.numeric(unlist(str_split(fighter_url, "/"))[2])
+  
+  # TODO
+}
+
 
 # Main code
-ufc_urls_all <- map(2024:2023, ~get_event_urls(.x)) %>% unlist()
-events <- map_df(ufc_urls_all, get_event_details)
+# Get URLs of all UFC events with decisions
+ufc_urls_all <- unlist(map(2024:2023, ~get_event_urls(.x)))
+
+# Loop over event URLs to construct events dataframe and get bout URLs
+event_df_list <- vector(mode = "list", length = length(ufc_urls_all))
+bout_urls_list <- vector(mode = "list", length = length(ufc_urls_all))
+
+for (i in 1:length(ufc_urls_all)) {
+  progress(i, length(ufc_urls_all))
+  session <- nod(bow = base_session, path = ufc_urls_all[i])
+  scraped_event_page <- scrape(session)
+  
+  event_df_list[[i]] <- get_event_details(ufc_urls_all[i], scraped_event_page)
+  bout_urls_list[[i]] <- scraped_event_page %>%
+    html_nodes("td.list2 > b > a") %>%
+    html_attr("href") %>%
+    str_trim()
+}
+
+events <- do.call(rbind, event_df_list) %>%
+  arrange(id)
+bout_urls_all <- unlist(bout_urls_list)
+
+# Loop over bout URLs to get bout info, scoring, fighter URLs, and referees
+bout_df_list <- vector(mode = "list", length = length(bout_urls_all))
+bout_scores_df_list <- vector(mode = "list", length = length(bout_urls_all))
+judge_df_list <- vector(mode = "list", length = length(bout_urls_all))
+fighter_urls_list <- vector(mode = "list", length = length(bout_urls_all))
+
+for (i in 1:length(bout_urls_all)) {
+  progress(i, length(bout_urls_all))
+  session <- nod(bow = base_session, path = bout_urls_all[i])
+  scraped_bout_page <- scrape(session)
+  
+  bout_df_list[[i]] <- get_bout_details(bout_urls_all[i], scraped_bout_page)
+  bout_scores_df_list[[i]] <- get_bout_scores(bout_urls_all[i], 
+                                              scraped_bout_page)
+  judge_df_list[[i]] <- get_judge_details(scraped_bout_page)
+  
+  fighter1_url <- scraped_bout_page %>% 
+    html_node("tr.top-row > td.decision-top > a") %>% 
+    html_attr("href")
+  fighter2_url <- scraped_bout_page %>% 
+    html_node("tr.bottom-row > td.decision-bottom > a") %>% 
+    html_attr("href")
+  fighter_urls_list[[i]] <- c(fighter1_url, fighter2_url)
+}
+
+bouts <- do.call(rbind, bout_df_list) %>%
+  arrange(id)
+bouts_scores <- do.call(rbind, bout_scores_df_list) %>%
+  arrange(id)
+judges <- do.call(rbind, judge_df_list) %>%
+  distinct(id, .keep_all = TRUE) %>%
+  arrange(id)
+fighter_urls_all <- unique(unlist(fighter_urls_list))
+
+# Construct fighter dataframe from fighter URLs
+#fighters <- map_df(fighter_urls_all, get_fighter_details) %>%
+#  arrange(id)
+
+# Save all dataframes to disk

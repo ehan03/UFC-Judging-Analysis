@@ -322,7 +322,7 @@ bouts <- fight_results_clean %>%
 
 # Create final bouts stats dataframe combining `fight_stats_clean` with manually
 # collected data for missing fights
-bouts_stats_by_round <- fight_stats_clean %>%
+bouts_stats <- fight_stats_clean %>%
   bind_rows(missing_bouts_stats_by_round) %>%
   left_join(bouts %>%
               mutate(bout_order = row_number()) %>%
@@ -333,7 +333,7 @@ bouts_stats_by_round <- fight_stats_clean %>%
 
 
 # Save all dataframes to disk
-saveRDS(events, "./data/UFC Stats/events.rds")
-saveRDS(fighters, "./data/UFC Stats/fighters.rds")
-saveRDS(bouts, "./data/UFC Stats/bouts.rds")
-saveRDS(bouts_stats_by_round, "./data/UFC Stats/bouts_stats_by_round.rds")
+saveRDS(events, "./data/UFC Stats/ufcstats_events.rds")
+saveRDS(fighters, "./data/UFC Stats/ufcstats_fighters.rds")
+saveRDS(bouts, "./data/UFC Stats/ufcstats_bouts.rds")
+saveRDS(bouts_stats, "./data/UFC Stats/ufcstats_bouts_stats.rds")

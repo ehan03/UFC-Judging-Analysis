@@ -97,7 +97,12 @@ get_bout_scores <- function(bout_url, scraped_bout_page) {
   judge_urls <- scraped_bout_page %>%
     html_nodes("tr.top-row > td.judge > a") %>%
     html_attr("href")
-  judge_ids <- sapply(str_split(judge_urls, "/"), function(x) as.numeric(x[2]))
+  judge_ids <- vapply(str_split(judge_urls, "/"), function(x) as.numeric(x[2]),
+                      numeric(1))
+  
+  if(length(judge_ids) < 3) {
+    judge_ids <- c(judge_ids, rep(NA, 3 - length(judge_ids)))
+  }
   stopifnot(length(judge_ids) == 3)
   
   fighter1_url <- scraped_bout_page %>% 
@@ -112,7 +117,7 @@ get_bout_scores <- function(bout_url, scraped_bout_page) {
   score_info <- scraped_bout_page %>% 
     html_nodes("table > tr > td > table > tr.decision > td.list") %>% 
     html_text(trim = TRUE)
-  stopifnot(length(score_info) %in% c(27, 45))
+  stopifnot(length(score_info) %% 9 == 0)
   
   score_info <- na_if(score_info, "-")
   num_rounds <- length(score_info) / 9
@@ -123,11 +128,16 @@ get_bout_scores <- function(bout_url, scraped_bout_page) {
   bout_scores_df <- data.frame(id = bout_id, round = rep(rounds, 2),
                                fighter_id = c(rep(fighter1_id, num_rounds * 3), 
                                               rep(fighter2_id, num_rounds * 3)),
+                               judge_num = rep(c(rep(1, num_rounds),
+                                                 rep(2, num_rounds),
+                                                 rep(3, num_rounds)),
+                                               2),
                                judge_id = rep(c(rep(judge_ids[1], num_rounds),
                                                 rep(judge_ids[2], num_rounds),
                                                 rep(judge_ids[3], num_rounds)), 
                                               2),
                                score = c(fighter1_scores, fighter2_scores))
+  stopifnot(ncol(bout_scores_df) == 6)
   
   return(bout_scores_df)
 }
@@ -148,73 +158,115 @@ get_judge_details <- function(scraped_bout_page) {
 }
 
 # Get fighter details
-get_fighter_details <- function(fighter_url, scraped_fighter_page) {
-  fighter_id <- as.numeric(unlist(str_split(fighter_url, "/"))[2])
+get_fighter_details <- function(fighter_url, bow = base_session) {
+  session <- nod(bow = bow, path = paste0(fighter_url, "/"))
+  scraped_fighter_page <- scrape(session)
   
-  # TODO
+  fighter_id <- as.numeric(unlist(str_split(fighter_url, "/"))[2])
+  fighter_name <- scraped_fighter_page %>% 
+    html_node("tr.top-row > td.judge2") %>% 
+    html_text(trim = TRUE)
+  
+  tables <- scraped_fighter_page %>% 
+    html_nodes("table > tr > td > table")
+  tds <- tables[1] %>% 
+    html_nodes("tr > td.top-cell, tr > td.list")
 }
 
 
 # Main code
-# Get URLs of all UFC events with decisions
-ufc_urls_all <- unlist(map(2024:2023, ~get_event_urls(.x)))
+# Define dataframe paths
+events_df_path <- "./data/MMA Decisions/mmadecisions_events.rds"
+bouts_df_path <- "./data/MMA Decisions/mmadecisions_bouts.rds"
+bouts_scores_df_path <- "./data/MMA Decisions/mmadecisions_bouts_scores.rds"
+judges_df_path <- "./data/MMA Decisions/mmadecisions_judges.rds"
+fighters_df_path <- "./data/MMA Decisions/mmadecisions_fighters.rds"
 
-# Loop over event URLs to construct events dataframe and get bout URLs
-event_df_list <- vector(mode = "list", length = length(ufc_urls_all))
-bout_urls_list <- vector(mode = "list", length = length(ufc_urls_all))
+# Define checkpoint paths
+bout_urls_path <- "./data/MMA Decisions/checkpoints/bout_urls.rds"
+fighter_urls_path <- "./data/MMA Decisions/checkpoints/fighter_urls.rds"
 
-for (i in 1:length(ufc_urls_all)) {
-  progress(i, length(ufc_urls_all))
-  session <- nod(bow = base_session, path = ufc_urls_all[i])
-  scraped_event_page <- scrape(session)
+if(!file.exists(events_df_path) | !file.exists(bout_urls_path)) {
+  # Get URLs of all UFC events with decisions
+  ufc_urls_all <- unlist(map(2024:1995, ~get_event_urls(.x)))
   
-  event_df_list[[i]] <- get_event_details(ufc_urls_all[i], scraped_event_page)
-  bout_urls_list[[i]] <- scraped_event_page %>%
-    html_nodes("td.list2 > b > a") %>%
-    html_attr("href") %>%
-    str_trim()
+  # Loop over event URLs to construct events dataframe and get bout URLs
+  event_df_list <- vector(mode = "list", length = length(ufc_urls_all))
+  bout_urls_list <- vector(mode = "list", length = length(ufc_urls_all))
+  
+  for (i in 1:length(ufc_urls_all)) {
+    progress(i, length(ufc_urls_all))
+    session <- nod(bow = base_session, path = paste0(ufc_urls_all[i], "/"))
+    scraped_event_page <- scrape(session)
+    
+    event_df_list[[i]] <- get_event_details(ufc_urls_all[i], scraped_event_page)
+    bout_urls_list[[i]] <- scraped_event_page %>%
+      html_nodes("td.list2 > b > a") %>%
+      html_attr("href") %>%
+      str_trim()
+  }
+  
+  events <- do.call(rbind, event_df_list)
+  bout_urls_all <- rev(unlist(bout_urls_list))
+  
+  # Save events dataframe
+  saveRDS(events, events_df_path)
+  
+  # Save bout URLs to avoid having to scrape again
+  saveRDS(bout_urls_all, bout_urls_path)
 }
 
-events <- do.call(rbind, event_df_list) %>%
-  arrange(id)
-bout_urls_all <- unlist(bout_urls_list)
-
-# Loop over bout URLs to get bout info, scoring, fighter URLs, and referees
-bout_df_list <- vector(mode = "list", length = length(bout_urls_all))
-bout_scores_df_list <- vector(mode = "list", length = length(bout_urls_all))
-judge_df_list <- vector(mode = "list", length = length(bout_urls_all))
-fighter_urls_list <- vector(mode = "list", length = length(bout_urls_all))
-
-for (i in 1:length(bout_urls_all)) {
-  progress(i, length(bout_urls_all))
-  session <- nod(bow = base_session, path = bout_urls_all[i])
-  scraped_bout_page <- scrape(session)
+if(!file.exists(bouts_df_path) | !file.exists(bouts_scores_df_path) |
+   !file.exists(judges_df_path) | !file.exists(fighter_urls_path)) {
+  # Load in bout URLs
+  bout_urls_all <- readRDS(bout_urls_path)
   
-  bout_df_list[[i]] <- get_bout_details(bout_urls_all[i], scraped_bout_page)
-  bout_scores_df_list[[i]] <- get_bout_scores(bout_urls_all[i], 
-                                              scraped_bout_page)
-  judge_df_list[[i]] <- get_judge_details(scraped_bout_page)
+  # Loop over bout URLs to get bout info, scoring, fighter URLs, and referees
+  bout_df_list <- vector(mode = "list", length = length(bout_urls_all))
+  bout_scores_df_list <- vector(mode = "list", length = length(bout_urls_all))
+  judge_df_list <- vector(mode = "list", length = length(bout_urls_all))
+  fighter_urls_list <- vector(mode = "list", length = length(bout_urls_all))
   
-  fighter1_url <- scraped_bout_page %>% 
-    html_node("tr.top-row > td.decision-top > a") %>% 
-    html_attr("href")
-  fighter2_url <- scraped_bout_page %>% 
-    html_node("tr.bottom-row > td.decision-bottom > a") %>% 
-    html_attr("href")
-  fighter_urls_list[[i]] <- c(fighter1_url, fighter2_url)
+  for (i in 1:length(bout_urls_all)) {
+    progress(i, length(bout_urls_all))
+    session <- nod(bow = base_session, path = paste0(bout_urls_all[i], "/"))
+    scraped_bout_page <- scrape(session)
+    
+    bout_df_list[[i]] <- get_bout_details(bout_urls_all[i], scraped_bout_page)
+    bout_scores_df_list[[i]] <- get_bout_scores(bout_urls_all[i], 
+                                                scraped_bout_page)
+    judge_df_list[[i]] <- get_judge_details(scraped_bout_page)
+    
+    fighter1_url <- scraped_bout_page %>% 
+      html_node("tr.top-row > td.decision-top > a") %>% 
+      html_attr("href")
+    fighter2_url <- scraped_bout_page %>% 
+      html_node("tr.bottom-row > td.decision-bottom > a") %>% 
+      html_attr("href")
+    fighter_urls_list[[i]] <- c(fighter1_url, fighter2_url)
+  }
+  
+  bouts <- do.call(rbind, bout_df_list)
+  bouts_scores <- do.call(rbind, bout_scores_df_list)
+  judges <- do.call(rbind, judge_df_list) %>%
+    distinct(id, .keep_all = TRUE) %>%
+    arrange(id)
+  fighter_urls_all <- unique(unlist(fighter_urls_list))
+  
+  # Save bouts, bouts scores, and judges dataframes
+  saveRDS(bouts, bouts_df_path)
+  saveRDS(bouts_scores, bouts_scores_df_path)
+  saveRDS(judges, judges_df_path)
+  
+  # Save fighter URLs to avoid having to scrape again
+  saveRDS(fighter_urls_all, fighter_urls_path)
 }
 
-bouts <- do.call(rbind, bout_df_list) %>%
-  arrange(id)
-bouts_scores <- do.call(rbind, bout_scores_df_list) %>%
-  arrange(id)
-judges <- do.call(rbind, judge_df_list) %>%
-  distinct(id, .keep_all = TRUE) %>%
-  arrange(id)
-fighter_urls_all <- unique(unlist(fighter_urls_list))
+if(!file.exists(fighters_df_path)) {
+  # Load in fighter URLs
+  fighter_urls_all <- readRDS(fighter_urls_path)
+}
 
 # Construct fighter dataframe from fighter URLs
 #fighters <- map_df(fighter_urls_all, get_fighter_details) %>%
 #  arrange(id)
-
-# Save all dataframes to disk

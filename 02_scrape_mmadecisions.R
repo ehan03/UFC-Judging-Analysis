@@ -179,6 +179,71 @@ get_fighter_details <- function(fighter_url, bow = base_session) {
     html_nodes("table > tr > td > table")
   tds <- tables[1] %>% 
     html_nodes("tr > td.top-cell, tr > td.list")
+  
+  born_info <- NA
+  height_info <- NA
+  reach_info <- NA
+  nickname_info <- NA
+  fought_out_of_info <- NA
+  
+  current_category <- NA
+  category_data <- c()
+  
+  for(i in seq_along(tds)) {
+    node <- tds[i]
+    class <- html_attr(node, "class")
+    
+    if(class == "top-cell") {
+      if(!is.na(current_category) && length(category_data) > 0) {
+        combined <- paste(category_data, collapse = "[SEP]")
+        
+        if(current_category == "BORN") {
+          born_info <- combined
+        } else if(current_category == "HEIGHT") {
+          height_info <- combined
+        } else if(current_category == "REACH") {
+          reach_info <- combined
+        } else if(current_category == "NICKNAME(S)") {
+          nickname_info <- combined
+        } else if(current_category == "HAS FOUGHT OUT OF") {
+          fought_out_of_info <- combined
+        }
+        
+        category_data <- c()
+      }
+      
+      current_category <- node %>%
+        html_text(trim = TRUE)
+    } else if(class == "list" && !is.na(current_category)) {
+      value <- node %>%
+        html_text(trim = TRUE) %>%
+        gsub("\\r|\\n|\\t", "", .)
+      category_data <- c(category_data, value)
+    }
+  }
+  
+  if(!is.na(current_category) && length(category_data) > 0) {
+    combined <- paste(category_data, collapse = "[SEP]")
+    
+    if(current_category == "BORN") {
+      born_info <- combined
+    } else if(current_category == "HEIGHT") {
+      height_info <- combined
+    } else if(current_category == "REACH") {
+      reach_info <- combined
+    } else if(current_category == "NICKNAME(S)") {
+      nickname_info <- combined
+    } else if(current_category == "HAS FOUGHT OUT OF") {
+      fought_out_of_info <- combined
+    }
+  }
+  
+  fighter_df <- data.frame(id = fighter_id, name = fighter_name, 
+                           born_info = born_info, height = height_info,
+                           reach = reach_info, nickname_info = nickname_info,
+                           fought_out_of_info = fought_out_of_info)
+  
+  return(fighter_df)
 }
 
 
@@ -274,8 +339,9 @@ if(!file.exists(bouts_df_path) | !file.exists(bouts_scores_df_path) |
 if(!file.exists(fighters_df_path)) {
   # Load in fighter URLs
   fighter_urls_all <- readRDS(fighter_urls_path)
+  fighters <- map_df(fighter_urls_all, get_fighter_details) %>%
+    arrange(id)
+  
+  # Save fighters dataframe
+  saveRDS(fighters, fighters_df_path)
 }
-
-# Construct fighter dataframe from fighter URLs
-#fighters <- map_df(fighter_urls_all, get_fighter_details) %>%
-#  arrange(id)

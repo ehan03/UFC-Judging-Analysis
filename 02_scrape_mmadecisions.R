@@ -48,8 +48,16 @@ get_event_details <- function(event_url, scraped_event_page) {
     str_split("\n") %>%
     unlist() %>%
     str_trim()
-  
+
   event_id <- as.numeric(unlist(str_split(event_url, "/"))[2])
+  
+  if(event_id == 1003) {
+    event_info[3] <- "Montevideo, Uruguay"
+  } else if(event_id == 1112) {
+    event_info[2] <- "UFC Apex"
+    event_info[3] <- "Las Vegas, Nevada, USA"
+  }
+  
   event_name <- event_info[1]
   venue <- event_info[2]
   city <- paste(head(str_split(event_info[3], ", ")[[1]], -1), 
@@ -206,7 +214,8 @@ if(!file.exists(events_df_path) | !file.exists(bout_urls_path)) {
       str_trim()
   }
   
-  events <- do.call(rbind, event_df_list)
+  events <- do.call(rbind, event_df_list) %>%
+    arrange(id)
   bout_urls_all <- rev(unlist(bout_urls_list))
   
   # Save events dataframe

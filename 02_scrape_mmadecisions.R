@@ -184,11 +184,11 @@ get_fighter_details <- function(fighter_url, bow = base_session) {
 
 # Main code
 # Define dataframe paths
-events_df_path <- "./data/MMA Decisions/mmadecisions_events.rds"
-bouts_df_path <- "./data/MMA Decisions/mmadecisions_bouts.rds"
-bouts_scores_df_path <- "./data/MMA Decisions/mmadecisions_bouts_scores.rds"
-judges_df_path <- "./data/MMA Decisions/mmadecisions_judges.rds"
-fighters_df_path <- "./data/MMA Decisions/mmadecisions_fighters.rds"
+events_df_path <- "./data/MMA Decisions/raw/events.rds"
+bouts_df_path <- "./data/MMA Decisions/raw/bouts.rds"
+bouts_scores_df_path <- "./data/MMA Decisions/raw/bouts_scores.rds"
+judges_df_path <- "./data/MMA Decisions/raw/judges.rds"
+fighters_df_path <- "./data/MMA Decisions/raw/fighters.rds"
 
 # Define checkpoint paths
 bout_urls_path <- "./data/MMA Decisions/checkpoints/bout_urls.rds"

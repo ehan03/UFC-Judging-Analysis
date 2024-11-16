@@ -14,6 +14,7 @@ get_event_urls <- function(year, bow = base_session) {
   session <- nod(bow = bow, path = paste0("decisions-by-event/", year, "/"))
   scraped_page <- scrape(session)
   
+  # Get relative links, names, and dates of events
   event_urls <- scraped_page %>%
     html_nodes("tr.decision > td.list > a") %>%
     html_attr("href")
@@ -51,6 +52,7 @@ get_event_details <- function(event_url, scraped_event_page) {
 
   event_id <- as.numeric(unlist(str_split(event_url, "/"))[2])
   
+  # Handle a few edge cases from poor data quality
   if(event_id == 1003) {
     event_info[3] <- "Montevideo, Uruguay"
   } else if(event_id == 1112) {
@@ -78,11 +80,13 @@ get_event_details <- function(event_url, scraped_event_page) {
 get_bout_details <- function(bout_url, scraped_bout_page) {
   bout_id <- as.numeric(unlist(str_split(bout_url, "/"))[2])
   
+  # Get event id corresponding to the bout
   event_url <- scraped_bout_page %>% 
     html_node("tr.top-row > td.decision-top2 > b > a") %>% 
     html_attr("href")
   event_id <- as.numeric(unlist(str_split(event_url, "/"))[2])
   
+  # Get fighter URLs and ids
   fighter1_url <- scraped_bout_page %>% 
     html_node("tr.top-row > td.decision-top > a") %>% 
     html_attr("href")
@@ -133,6 +137,8 @@ get_bout_scores <- function(bout_url, scraped_bout_page) {
   fighter1_scores <- as.numeric(score_info[seq_along(score_info) %% 3 == 2])
   fighter2_scores <- as.numeric(score_info[seq_along(score_info) %% 3 == 0])
   
+  # Organize dataframe such that each row is one score from one judge for
+  # one of the fighters in a bout round
   bout_scores_df <- data.frame(id = bout_id, round = rep(rounds, 2),
                                fighter_id = c(rep(fighter1_id, num_rounds * 3), 
                                               rep(fighter2_id, num_rounds * 3)),
@@ -189,6 +195,10 @@ get_fighter_details <- function(fighter_url, bow = base_session) {
   current_category <- NA
   category_data <- c()
   
+  # Extract out data for relevant fields
+  # This code is necessary due to the site's poor HTML design and the fact that
+  # some headers like "BORN" can have multiple separate pieces of info that
+  # fall under it
   for(i in seq_along(tds)) {
     node <- tds[i]
     class <- html_attr(node, "class")

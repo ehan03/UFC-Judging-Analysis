@@ -61,6 +61,9 @@ clean_fighters <- raw_fighters %>%
   mutate(date_of_birth = na_if(date_of_birth, "")) %>%
   mutate(birth_location = na_if(birth_location, "")) %>%
   
+  # Clean up strange whitespace characters in names
+  mutate(name = gsub("\u00A0", " ", name, fixed = TRUE)) %>%
+  
   # Clean DOB
   mutate(date_of_birth = as.Date(gsub(" \\(.*\\)", "", date_of_birth),
                                  format = "%B %d, %Y")) %>%
@@ -85,15 +88,19 @@ clean_fighters <- raw_fighters %>%
 clean_fighters[duplicated(clean_fighters$name) | 
                duplicated(clean_fighters$name, fromLast = TRUE), ]
 
-# Manually checking, Nick Fiore is duplicated
+# Manually checking, Nick Fiore and Zha Yi are duplicated
 # Remove fighter entry and replace in bouts and scores data
 clean_fighters <- clean_fighters %>%
-  filter(id != 4934)
+  filter(id != 4934) %>%
+  filter(id != 6748)
 raw_bouts <- raw_bouts %>%
   mutate(fighter1_id = ifelse(fighter1_id == 4934, 6373, fighter1_id)) %>%
-  mutate(fighter2_id = ifelse(fighter2_id == 4934, 6373, fighter2_id))
+  mutate(fighter2_id = ifelse(fighter2_id == 4934, 6373, fighter2_id)) %>%
+  mutate(fighter1_id = ifelse(fighter1_id == 6748, 6394, fighter1_id)) %>%
+  mutate(fighter1_id = ifelse(fighter2_id == 6748, 6394, fighter1_id))
 raw_bouts_scores <- raw_bouts_scores %>%
-  mutate(fighter_id = ifelse(fighter_id == 4934, 6373, fighter_id))
+  mutate(fighter_id = ifelse(fighter_id == 4934, 6373, fighter_id)) %>%
+  mutate(fighter_id = ifelse(fighter_id == 6748, 6394, fighter_id))
 
 # Save cleaned data
 saveRDS(clean_fighters, "./data/MMA Decisions/mmadecisions_fighters.rds")

@@ -97,7 +97,7 @@ raw_bouts <- raw_bouts %>%
   mutate(fighter1_id = ifelse(fighter1_id == 4934, 6373, fighter1_id)) %>%
   mutate(fighter2_id = ifelse(fighter2_id == 4934, 6373, fighter2_id)) %>%
   mutate(fighter1_id = ifelse(fighter1_id == 6748, 6394, fighter1_id)) %>%
-  mutate(fighter1_id = ifelse(fighter2_id == 6748, 6394, fighter1_id))
+  mutate(fighter2_id = ifelse(fighter2_id == 6748, 6394, fighter2_id))
 raw_bouts_scores <- raw_bouts_scores %>%
   mutate(fighter_id = ifelse(fighter_id == 4934, 6373, fighter_id)) %>%
   mutate(fighter_id = ifelse(fighter_id == 6748, 6394, fighter_id))

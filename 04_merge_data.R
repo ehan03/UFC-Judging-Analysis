@@ -300,6 +300,23 @@ final_df <- stats_merge %>%
 
 head(final_df)
 
+# Handle instances where there were point deductions
+deductions <- final_df %>%
+  filter(red_score < 10,
+         blue_score < 10)
+ufcstats_bouts %>%
+  filter(id %in% deductions$ufcstats_bout_id) %>%
+  select(id, outcome_method_details)
+
+points_fix <- read.csv("./data/point_deductions.csv")
+final_df_fix <- final_df %>%
+  left_join(points_fix,
+            by = join_by(ufcstats_bout_id, round)) %>%
+  mutate(red_score = ifelse((!is.na(red_deduction)) & (red_deduction == 1), 
+                            red_score + points, red_score)) %>%
+  mutate(blue_score = ifelse((!is.na(red_deduction)) & (red_deduction == 0), 
+                             blue_score + points, blue_score)) %>%
+  select(-c(red_deduction, points))
 
 # Save final combined dataframe
-saveRDS(final_df, "./data/final_merged.rds")
+saveRDS(final_df_fix, "./data/final_merged.rds")

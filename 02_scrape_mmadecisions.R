@@ -6,7 +6,7 @@ library(tidyverse)
 
 # Initialize polite session with home URL
 base_session <- bow(url = "https://mmadecisions.com/", user_agent = "eugene",
-                    force = TRUE, delay = 1)
+                    force = TRUE, delay = 5)
 
 # Define all functions
 # Grab event URLs corresponding to UFC events

@@ -130,10 +130,25 @@ y %>%
 #' 
 #' ## Acquisition
 #' 
+#' To respect the UFC's Terms of Service, we did not directly scrape fight
+#' data from the UFC Stats website and instead elected to use the data
+#' collected and aggregated in a public GitHub repository by user Greco1899 
+#' (https://github.com/Greco1899/scrape_ufc_stats). The data used for this 
+#' report was downloaded on October 21, 2024 to ensure a fixed cutoff date since 
+#' the repository updates on a weekly basis.
 #' 
+#' To obtain data from the MMA Decisions website, we utilized `rvest` for
+#' extracting relevant information from the HTML structure and `polite` for
+#' session management and crawling web pages respectfully, ensuring a 5 second
+#' delay between requests. The general strategy we took was to grab all
+#' necessary URLs and saving them to disk before extracting data and creating
+#' the final dataframes so that we avoid any excessive page revisits.
 #' 
 #' 
 #' ## Cleaning
+#' 
+#' 
+#' 
 #' 
 #' ## Merging
 #' 

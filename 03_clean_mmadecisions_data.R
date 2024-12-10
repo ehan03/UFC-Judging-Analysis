@@ -113,8 +113,9 @@ head(raw_judges)
 # Check for duplicate names
 nrow(raw_judges) == length(unique(raw_judges$name))
 
-# Seems fine, can save as is
-clean_judges <- raw_judges
+# Seems fine, can save as is after replacing white space
+clean_judges <- raw_judges %>%
+  mutate(name = gsub("\u00A0", " ", name, fixed = TRUE))
 saveRDS(clean_judges, "./data/MMA Decisions/mmadecisions_judges.rds")
 
 

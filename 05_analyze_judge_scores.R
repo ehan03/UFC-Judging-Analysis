@@ -1,5 +1,7 @@
 # Load libraries
 library(tidyverse)
+library(GGally)
+library(ggfortify)
 
 # Load data
 x <- readRDS("./data/final_merged.rds")
@@ -26,46 +28,20 @@ xx <- x %>%
 sort(table(xx$judge_name, useNA = "always"), decreasing = TRUE)
 length(unique(xx$judge_name)) == length(unique(xx$judge_id))
 
-# Create exhaustive set of features for convenience, not all will be used
+# Create preliminary set of features
 xf <- xx %>%
   mutate(knockdowns_scored_diff = red_knockdowns_scored - 
            blue_knockdowns_scored) %>%
   mutate(total_strikes_landed_diff = red_total_strikes_landed - 
            blue_total_strikes_landed) %>%
-  mutate(total_strikes_attempted_diff = red_total_strikes_attempted - 
-           blue_total_strikes_attempted) %>%
-  mutate(sig_strikes_landed_diff = red_sig_strikes_landed - 
-           blue_sig_strikes_landed) %>%
-  mutate(sig_strikes_attempted_diff = red_sig_strikes_attempted - 
-           blue_sig_strikes_attempted) %>%
   mutate(sig_strikes_head_landed_diff = red_sig_strikes_head_landed - 
            blue_sig_strikes_head_landed) %>%
-  mutate(sig_strikes_head_attempted_diff = red_sig_strikes_head_attempted - 
-           blue_sig_strikes_head_attempted) %>%
   mutate(sig_strikes_body_landed_diff = red_sig_strikes_body_landed - 
            blue_sig_strikes_body_landed) %>%
-  mutate(sig_strikes_body_attempted_diff = red_sig_strikes_body_attempted - 
-           blue_sig_strikes_body_attempted) %>%
   mutate(sig_strikes_leg_landed_diff = red_sig_strikes_leg_landed -
            blue_sig_strikes_leg_landed) %>%
-  mutate(sig_strikes_leg_attempted_diff = red_sig_strikes_leg_attempted - 
-           blue_sig_strikes_leg_attempted) %>%
-  mutate(sig_strikes_distance_landed_diff = red_sig_strikes_distance_landed - 
-           blue_sig_strikes_distance_landed) %>%
-  mutate(sig_strikes_distance_attempted_diff = red_sig_strikes_distance_attempted - 
-           blue_sig_strikes_distance_attempted) %>%
-  mutate(sig_strikes_clinch_landed_diff = red_sig_strikes_clinch_landed - 
-           blue_sig_strikes_clinch_landed) %>%
-  mutate(sig_strikes_clinch_attempted_diff = red_sig_strikes_clinch_attempted - 
-           blue_sig_strikes_clinch_attempted) %>%
-  mutate(sig_strikes_ground_landed_diff = red_sig_strikes_ground_landed - 
-           blue_sig_strikes_ground_landed) %>%
-  mutate(sig_strikes_ground_attempted_diff = red_sig_strikes_ground_attempted - 
-           blue_sig_strikes_ground_attempted) %>%
   mutate(takedowns_landed_diff = red_takedowns_landed - 
            blue_takedowns_landed) %>%
-  mutate(takedowns_attempted_diff = red_takedowns_attempted - 
-           blue_takedowns_attempted) %>%
   mutate(submissions_attempted_diff = red_submissions_attempted - 
            blue_submissions_attempted) %>%
   mutate(reversals_scored_diff = red_reversals_scored - 
@@ -73,23 +49,87 @@ xf <- xx %>%
   mutate(control_time_seconds_diff = red_control_time_seconds - 
            blue_control_time_seconds) %>%
   mutate(score_diff = red_score - blue_score) %>%
+  mutate(score_string = factor(paste0(red_score, "-", blue_score),
+                               levels = c("8-10", "9-10", "10-10", "10-9", 
+                                          "10-8"))) %>%
   mutate(judge_name = as.factor(judge_name)) %>%
-  select(knockdowns_scored_diff, total_strikes_landed_diff, 
-         total_strikes_attempted_diff, sig_strikes_landed_diff, 
-         sig_strikes_attempted_diff, sig_strikes_head_landed_diff,
-         sig_strikes_head_attempted_diff, sig_strikes_body_landed_diff,
-         sig_strikes_body_attempted_diff, sig_strikes_leg_landed_diff,
-         sig_strikes_leg_attempted_diff, sig_strikes_distance_landed_diff,
-         sig_strikes_distance_attempted_diff, sig_strikes_clinch_landed_diff,
-         sig_strikes_clinch_attempted_diff, sig_strikes_ground_landed_diff,
-         sig_strikes_ground_attempted_diff, takedowns_landed_diff, 
-         takedowns_attempted_diff, submissions_attempted_diff, 
-         reversals_scored_diff, control_time_seconds_diff, judge_name, 
-         score_diff)
-  
-xff <- xf %>%
   select(knockdowns_scored_diff, total_strikes_landed_diff, 
          sig_strikes_head_landed_diff, sig_strikes_body_landed_diff,
          sig_strikes_leg_landed_diff, takedowns_landed_diff, 
          submissions_attempted_diff, reversals_scored_diff, 
-         control_time_seconds_diff, judge_name, score_diff)
+         control_time_seconds_diff, judge_name, score_diff, score_string)
+
+# Save for ease of use
+saveRDS(xf, "./data/final_merged_features.rds")
+
+# Distribution of scores
+table(xf$score_diff, useNA = "always")
+table(xf$score_string, useNA = "always")
+
+# Number of judges
+length(unique(xf$judge_name))
+judge_counts <- table(xf$judge_name)
+summary(as.numeric(judge_counts))
+
+xf %>%
+  group_by(judge_name) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  as.data.frame() %>%
+  head(10)
+
+# Visualizations
+set.seed(123)
+xf_diff_long <- xf %>%
+  sample_n(1000) %>%
+  select(-c(judge_name, score_string)) %>%
+  pivot_longer(cols = -score_diff, names_to = "Predictor", values_to = "Value")
+
+ggplot(xf_diff_long, aes(x = Value, y = score_diff)) + 
+  geom_point() + 
+  geom_jitter(alpha = 0.6, width = 0.2, height = 0.4) +
+  facet_wrap(~ Predictor, ncol = 3, scales = "free_x") + 
+  theme_minimal() + 
+  labs(title = "Score Difference vs. Predictors", x = "Predictor Values", 
+       y = "Score Difference")
+
+
+
+xf_diff_long_full <- xf %>%
+  select(-c(judge_name, score_diff)) %>%
+  pivot_longer(cols = -score_string, names_to = "Predictor", 
+               values_to = "Value")
+
+ggplot(xf_diff_long_full, aes(x = Value, y = score_string)) + 
+  geom_boxplot() +  
+  facet_wrap(~ Predictor, ncol = 3, scales = "free_x") + 
+  theme_minimal() + 
+  labs(title = "Score Category vs. Numeric Predictors", 
+       x = "Predictor Values", y = "Score Category")
+
+
+ggpairs(xf %>% sample_n(1000) %>% select(-c(judge_name, score_diff, score_string)),
+        upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("points", size = 0.5))) + 
+  theme(axis.text = element_text(size = 3),
+        strip.text = element_text(size = 2))
+
+
+# Linear regression model
+levels(xf$judge_name)[1]
+
+m1 <- lm(score_diff ~ knockdowns_scored_diff + total_strikes_landed_diff + 
+         sig_strikes_head_landed_diff + sig_strikes_body_landed_diff +
+         sig_strikes_leg_landed_diff + takedowns_landed_diff +
+         submissions_attempted_diff + reversals_scored_diff +
+         control_time_seconds_diff + judge_name, data = xf)
+summary(m1)
+autoplot(m1)
+
+
+# Linear regression + interactions for judges
+xf_sub <- xf %>%
+  filter(judge_name %in% c("Sal D'Amato", "Derek Cleary", "Chris Lee",
+                           "Michael Bell", "Junichiro Kamijo", "Eric Colón",
+                           "Tony Weeks", "Ron McCarthy", "Adalaide Byrd",
+                           "Ben Cartlidge"))

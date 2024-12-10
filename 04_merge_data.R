@@ -274,7 +274,7 @@ standard_scores <- mmadecisions_bouts_scores %>%
          !is.na(score))
 
 # Join with scoring data
-final_df <- stats_merge %>%
+merged <- stats_merge %>%
   
   # Finally, join with scoring data
   left_join(standard_scores %>%
@@ -298,10 +298,10 @@ final_df <- stats_merge %>%
   # Sort
   arrange(mmadecisions_bout_id, round, judge_num)
 
-head(final_df)
+head(merged)
 
 # Handle instances where there were point deductions
-deductions <- final_df %>%
+deductions <- merged %>%
   filter(red_score < 10,
          blue_score < 10)
 ufcstats_bouts %>%
@@ -309,7 +309,7 @@ ufcstats_bouts %>%
   select(id, outcome_method_details)
 
 points_fix <- read.csv("./data/UFC Stats/point_deductions.csv")
-final_df_fix <- final_df %>%
+merged_fix <- merged %>%
   left_join(points_fix,
             by = join_by(ufcstats_bout_id, round)) %>%
   mutate(red_score = ifelse((!is.na(red_deduction)) & (red_deduction == 1), 
@@ -318,5 +318,17 @@ final_df_fix <- final_df %>%
                              blue_score + points, blue_score)) %>%
   select(-c(red_deduction, points))
 
+# Filter out rows where the difference in scores > 2 or where judge is unknown
+# Also filter out rows where judge has scored less than 3 rounds
+table(merged_fix$red_score - merged_fix$blue_score, useNA = "always")
+merged_fix 
+final_merged <- merged_fix %>%
+  filter(abs(red_score - blue_score) <= 2) %>%
+  filter(!is.na(judge_id)) %>%
+  group_by(judge_id) %>%
+  filter(n() >= 3) %>%
+  ungroup() %>%
+  as.data.frame()
+
 # Save final combined dataframe
-saveRDS(final_df_fix, "./data/final_merged.rds")
+saveRDS(final_merged, "./data/final_merged.rds")

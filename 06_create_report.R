@@ -147,10 +147,40 @@ y %>%
 #' 
 #' ## Cleaning
 #' 
+#' Cleaning the UFC Stats data mainly revolved around converting strings into
+#' numeric values and standardizing the data to rely on unique IDs over
+#' potentially non-unique names/strings. A particularly relevant example of
+#' converting strings to numbers were statistics involving successes and
+#' attempts. For instance, the scraped data might list "1 of 2" for takedowns
+#' which needs to be parsed into 1 takedown landed and 2 takedowns attempted.
+#' In terms of unique IDs, one of the biggest problems in the scraped data was
+#' how fight-level data was stored. While each fight could easily be traced back 
+#' to a unique bout ID, the IDs of the two fighters were not stored by fight and
+#' instead a fight "name" was stored in the form "Red Fighter Name vs. Blue 
+#' Fighter Name." This was especially problematic because some fighters have
+#' identical first and last names. Moreover, the GitHub user had wrote their
+#' scripts such that fighter data would only append new entries while all other
+#' data would be rewritten every week; any fighters whose names had been updated
+#' over time made it so that a simple join would not handle all cases. As a 
+#' result, a nontrivial amount of the matching had to be done manually by
+#' cross-referencing the UFC Stats website. The motivation behind all of this
+#' was that if we could successfully create a one-to-one mapping between the
+#' event IDs and fighter IDs from UFC Stats and those of MMA Decisions, the 
+#' fight IDs could then be matched trivially so that all fight statistics had 
+#' corresponding judge scores.
 #' 
+#' Cleaning the MMA Decisions data was significantly easier as a lot of the
+#' preprocessing logic had been baked directly into the code for scraping the
+#' information from the website. Only the fighter data needed attention to
+#' handle duplicate fighters and parsing out fields like dates of birth and
+#' nicknames from free-form text which was an artifact of the poor HTML 
+#' structure of fighter pages.
 #' 
 #' 
 #' ## Merging
+#' 
+#' 
+#' 
 #' 
 #' ## Final Preprocessing
 #' 

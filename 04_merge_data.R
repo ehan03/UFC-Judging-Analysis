@@ -308,7 +308,7 @@ ufcstats_bouts %>%
   filter(id %in% deductions$ufcstats_bout_id) %>%
   select(id, outcome_method_details)
 
-points_fix <- read.csv("./data/point_deductions.csv")
+points_fix <- read.csv("./data/UFC Stats/point_deductions.csv")
 final_df_fix <- final_df %>%
   left_join(points_fix,
             by = join_by(ufcstats_bout_id, round)) %>%

@@ -17,6 +17,7 @@ library(knitr)
 library(tidyverse)
 library(GGally)
 library(ggfortify)
+library(broom)
 
 #-
 
@@ -499,6 +500,84 @@ autoplot(m1)
 #' 
 #' ### Linear Regression with Interaction Terms
 #' 
+#' 
+#' 
+
+#+ echo = FALSE
+
+xf_sub <- xf %>%
+  filter(judge_name %in% c("Sal D'Amato", "Derek Cleary", "Chris Lee",
+                           "Michael Bell", "Junichiro Kamijo", "Eric Colón",
+                           "Tony Weeks", "Ron McCarthy", "Adalaide Byrd",
+                           "Ben Cartlidge")) %>%
+  mutate(judge_name = factor(judge_name))
+
+m2 <- lm(score_diff ~ judge_name / knockdowns_scored_diff + 
+           judge_name / total_strikes_landed_diff + 
+           judge_name / sig_strikes_head_landed_diff + 
+           judge_name / sig_strikes_body_landed_diff + 
+           judge_name / sig_strikes_leg_landed_diff + 
+           judge_name / takedowns_landed_diff + 
+           judge_name / submissions_attempted_diff + 
+           judge_name / reversals_scored_diff + 
+           judge_name / control_time_seconds_diff, data = xf_sub)
+options(max.print = 70)
+summary(m2)
+
+#-
+
+#' 
+#' **Discuss model**
+#' 
+
+#+ echo = FALSE
+
+autoplot(m2)
+
+#- 
+
+
+#' 
+#' **Discuss diagnostic plots**
+#' 
+
+#+ echo = FALSE
+
+model_results <- tidy(m2, conf.int = TRUE)
+plot_data <- model_results %>%
+  filter(grepl(":", term)) %>%
+  mutate(Variable = sub(".*:", "", term)) %>%
+  mutate(Judge = sub("^judge_name(.*):.*", "\\1", term)) %>%
+  select(Judge, Variable, estimate, conf.low, conf.high)
+plot_data %>%
+  head() %>%
+  kable(row.names = FALSE)
+
+#-
+
+#' 
+#' blah blah blah
+#' 
+
+#+ echo = FALSE
+
+ggplot(plot_data, aes(x = estimate, y = Judge, color = Judge)) +
+  geom_point(size = 1.2) +  
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +  
+  facet_wrap(~ Variable, nrow = 3, scales = "free_x") + 
+  theme_minimal() +
+  scale_color_hue(h = c(180, 300)) + 
+  labs(title = "Marginal Effects of Fight Variables by Judge with 95% CIs",
+       x = "Marginal Effect (Coefficient)",
+       y = "Judge") +
+  theme(axis.text.y = element_text(size = 6),
+        strip.text = element_text(size = 8),
+        legend.position = "none")
+
+#-
+
+#' 
+#' **Talk about results**
 #' 
 #' 
 #' # Conclusion

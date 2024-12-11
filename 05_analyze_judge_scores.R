@@ -2,6 +2,7 @@
 library(tidyverse)
 library(GGally)
 library(ggfortify)
+library(broom)
 
 # Load data
 x <- readRDS("./data/final_merged.rds")
@@ -108,7 +109,8 @@ ggplot(xf_diff_long_full, aes(x = Value, y = score_string)) +
        x = "Predictor Values", y = "Score Category")
 
 
-ggpairs(xf %>% sample_n(1000) %>% select(-c(judge_name, score_diff, score_string)),
+ggpairs(xf %>% sample_n(1000) %>% select(-c(judge_name, score_diff, 
+                                            score_string)),
         upper = list(continuous = wrap("cor", size = 2)),
         lower = list(continuous = wrap("points", size = 0.5))) + 
   theme(axis.text = element_text(size = 3),
@@ -132,4 +134,44 @@ xf_sub <- xf %>%
   filter(judge_name %in% c("Sal D'Amato", "Derek Cleary", "Chris Lee",
                            "Michael Bell", "Junichiro Kamijo", "Eric Colón",
                            "Tony Weeks", "Ron McCarthy", "Adalaide Byrd",
-                           "Ben Cartlidge"))
+                           "Ben Cartlidge")) %>%
+  mutate(judge_name = factor(judge_name))
+
+m2 <- lm(score_diff ~ judge_name / knockdowns_scored_diff + 
+           judge_name / total_strikes_landed_diff + 
+           judge_name / sig_strikes_head_landed_diff + 
+           judge_name / sig_strikes_body_landed_diff + 
+           judge_name / sig_strikes_leg_landed_diff + 
+           judge_name / takedowns_landed_diff + 
+           judge_name / submissions_attempted_diff + 
+           judge_name / reversals_scored_diff + 
+           judge_name / control_time_seconds_diff, data = xf_sub)
+summary(m2)
+autoplot(m2)
+
+
+# Get coefficients and confidence intervals
+model_results <- tidy(m2, conf.int = TRUE)
+
+# Filter for relevant rows
+plot_data <- model_results %>%
+  filter(grepl(":", term)) %>%
+  mutate(Variable = sub(".*:", "", term)) %>%
+  mutate(Judge = sub("^judge_name(.*):.*", "\\1", term)) %>%
+  select(Judge, Variable, estimate, conf.low, conf.high)
+
+# Create plot
+ggplot(plot_data, aes(x = estimate, y = Judge, color = Judge)) +
+  geom_point(size = 1.5) +  
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +  
+  facet_wrap(~ Variable, ncol = 3, scales = "free_x") + 
+  theme_minimal() +
+  scale_color_hue(h = c(180, 300)) + 
+  labs(title = "Marginal Effects of Fight Variables by Judge",
+       x = "Marginal Effect (Coefficient)",
+       y = "Judge") +
+  theme(axis.text.y = element_text(size = 4),
+        strip.text = element_text(size = 8),
+        legend.position = "none")
+
+

@@ -2,7 +2,18 @@
 #' title: "S&DS 625 Final Project"
 #' date: "`r Sys.Date()`"
 #' author: "Eugene Han"
-#' abstract: "This is a dummy paragraph to test knitted abstract output."
+#' abstract: "Judging in mixed martial arts (MMA), particularly within the UFC, 
+#'            is often contentious due to subjective interpretations of scoring 
+#'            criteria. This project examines the relationship between fight 
+#'            statistics and round-level scoring, emphasizing variability across 
+#'            judges. By merging data from MMA Decisions and UFC Stats, the 
+#'            study identifies significant predictors of score differences, 
+#'            including striking and grappling metrics, and highlights notable 
+#'            discrepancies in how judges evaluate these factors. Unlike prior 
+#'            predictive modeling efforts, this work focuses on inferential 
+#'            analysis at the individual judge level, offering insights into 
+#'            scoring biases and variability, thereby contributing to the 
+#'            understanding of subjectivity in MMA judging."
 #' output: 
 #'   pdf_document:
 #'     number_sections: true
@@ -250,7 +261,12 @@ y %>%
 #' variables as well as engineer a basic set of features based on domain
 #' knowledge that we believe would fundamentally influence judge scoring. We
 #' then visualize these variables and their relationships between each other
-#' and the response(s). In the analysis section, we **TODO**
+#' and the response. In the analysis section, we then fit two models: a baseline
+#' linear regression model on all of our observations to sanity check our
+#' engineered features, and a second linear regression on a subset (fight
+#' rounds that were scored by the top 10 judges with the most rounds scored)
+#' that includes interaction terms to try to tease out individual judge
+#' preferences.
 #' 
 #' 
 #' ## Exploration
@@ -476,15 +492,39 @@ summary(m1)
 #-
 
 #' 
-#' Based on our model summary, we see that all of our engineered numeric
+#' Based on our model summary, our baseline approach has multiple and adjusted
+#' R-squared values of 0.4912 and 0.484, respectively, indicating that it
+#' captures a moderate amount of the variance in `score_diff` and is overall
+#' a decent fit to our data. We see that all of our engineered numeric
 #' predictors are statistically significant, although this is partially an
-#' artifact of having such a large sample size such that even small deviations
+#' artifact of having a large sample size such that even small deviations
 #' from zero can be flagged as significant. Still, this model yields some
 #' useful information to us. We can see that the signs and magnitudes of the
-#' coefficients for each of these features align with our expectations that
+#' coefficients for each of these features align with our expectations that a
+#' larger positive value should be associated with scoring that increasingly
+#' favors the fighter in the red corner and that features corresponding to
+#' rarer but more impactful events such as knockdowns have larger coefficients.
+#' 
+#' For instance, when holding all other variables constant, an increase in
+#' `total_strikes_landed_diff` by 1 (which corresponds to the fighter in the
+#' red corner landing one more additional strike on their opponent) is
+#' associated with an increase in the score difference between red and blue
+#' fighters by about 0.005 in favor of red. Since strike counts can rack up
+#' quickly during a round, this makes sense; only a total dominance via a
+#' substantial gap in strikes landed would warrant consideration for scoring
+#' a round in favor of a "10-8" over a "10-9." On the other hand, an increase
+#' in `knockdowns_scored_diff` by 1 is associated with an increase in 
+#' `score_diff` by 0.394 when all other predictors are held fixed. Knockdowns
+#' are infrequent and only occur when a fighter lands a particularly devastating 
+#' strike, and so it is not surprising that this coefficient is so large 
+#' relative to that of other predictors.
 #' 
 #' With that being said, it's important to point out the obvious limitations of
-#' this model.
+#' this model. In particular, our response `score_diff` is discrete and bounded
+#' such that it only takes on 5 unique values. As a result, our model will
+#' predict unrealistic values given data that are either not integers and/or 
+#' fall outside of the interval [-2, 2]. Moreover, we also observe strange
+#' behavior in some of our diagnostic plots due to the nature of `score_diff`.
 #' 
 
 #+ echo = FALSE
@@ -494,22 +534,51 @@ autoplot(m1)
 #-
 
 #' 
-#' **Discuss diagnostic plots**
+#' Because the response variable is always one of {-2, -1, 0, 1, 2}, we see
+#' a series of "stripes" in our residuals vs. fitted plot as well as a
+#' collection of "V" shaped curves in our scale-location plot for each of the
+#' 5 values, which may indicate heteroskedasticity of residuals. There is some 
+#' evidence of non-normality based on the Q-Q plot especially at the tails, but 
+#' this isn't a huge surprise given the quantity of data we have. Based on the
+#' residuals vs. leverage plot, we don't see any observations that fall outside
+#' of Cook's distance values of 0.5 or 1 which suggests that we don't have any
+#' influential points.
 #' 
 #' 
 #' 
 #' ### Linear Regression with Interaction Terms
 #' 
+#' Next, in an attempt to estimate judge-specific coefficients of our
+#' predictors, we build on the previous model by including interaction terms
+#' between `judge_name` and each of the 9 engineered features. Because there are
+#' 394 unique judges in the full dataset, fitting such a model is impractical
+#' and computationally intensive. Consequently, we decided to take a subset of
+#' our dataset and filter for rounds that were scored by the top 20 judges with
+#' respect to the number of observations present. This leaves us with 17732
+#' rows of data or about 62% of the original data with all judges having at
+#' least 320 observations, which will help us avoid egregiously large standard
+#' errors.
 #' 
+#' Since we want to view the predictors from the lens of each judge, we are most
+#' interested in estimating *marginal* effects. To avoid having to tediously
+#' compute these marginal effects by adding the interaction effects with the
+#' coefficients of the reference level as well as having to work with the
+#' covariance matrix to calculate standard errors, we use the shorthand
+#' `y ~ f / x` when specifying our model which will directly give us estimates 
+#' of the marginal effects and the corresponding standard errors [@interaction].
 #' 
 
 #+ echo = FALSE
 
+top_20_freq <- xf %>%
+  group_by(judge_name) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  as.data.frame() %>%
+  head(20)
+
 xf_sub <- xf %>%
-  filter(judge_name %in% c("Sal D'Amato", "Derek Cleary", "Chris Lee",
-                           "Michael Bell", "Junichiro Kamijo", "Eric Colón",
-                           "Tony Weeks", "Ron McCarthy", "Adalaide Byrd",
-                           "Ben Cartlidge")) %>%
+  filter(judge_name %in% top_20_freq$judge_name) %>%
   mutate(judge_name = factor(judge_name))
 
 m2 <- lm(score_diff ~ judge_name / knockdowns_scored_diff + 
@@ -521,13 +590,24 @@ m2 <- lm(score_diff ~ judge_name / knockdowns_scored_diff +
            judge_name / submissions_attempted_diff + 
            judge_name / reversals_scored_diff + 
            judge_name / control_time_seconds_diff, data = xf_sub)
-options(max.print = 70)
+
+options(max.print = 30)
 summary(m2)
 
 #-
 
 #' 
-#' **Discuss model**
+#' For brevity, we've truncated the summary output. This augmented model
+#' achieves multiple and adjusted R-squared values of 0.5018 and 0.4961,
+#' respectively, which are similar to our baseline and again indicates an
+#' decent fit to the data. Although not visible above, the estimates for the
+#' marginal effects correspond to the coefficients of the form
+#' `judge_nameAdalaide Byrd:knockdowns_scored_diff`. We will extract these
+#' out separately and visualize them later.
+#' 
+#' For completeness, we again generate the model diagnostic plots and see
+#' very similar outputs to those of the baseline model since we still have the
+#' issue of having a discrete response that takes one of five unique values.
 #' 
 
 #+ echo = FALSE
@@ -538,7 +618,12 @@ autoplot(m2)
 
 
 #' 
-#' **Discuss diagnostic plots**
+#' Next, we can use the `tidy` function from `broom` to extract out and
+#' tabularize the model coefficients along with the corresponding lower and
+#' upper endpoints of the 95% confidence intervals. We then filter for the
+#' marginal effects by looking for the presence of a `:` symbol and extract
+#' out the judge name and feature name. The first several rows of this
+#' data frame are shown below.
 #' 
 
 #+ echo = FALSE
@@ -556,10 +641,11 @@ plot_data %>%
 #-
 
 #' 
-#' blah blah blah
+#' Using this, we can visualize the marginal effects by judge and facet by
+#' each predictor.
 #' 
 
-#+ echo = FALSE
+#+ echo = FALSE, fig.height = 8
 
 ggplot(plot_data, aes(x = estimate, y = Judge, color = Judge)) +
   geom_point(size = 1.2) +  
@@ -570,17 +656,101 @@ ggplot(plot_data, aes(x = estimate, y = Judge, color = Judge)) +
   labs(title = "Marginal Effects of Fight Variables by Judge with 95% CIs",
        x = "Marginal Effect (Coefficient)",
        y = "Judge") +
-  theme(axis.text.y = element_text(size = 6),
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
         strip.text = element_text(size = 8),
         legend.position = "none")
 
 #-
 
 #' 
-#' **Talk about results**
+#' Based on the plots above, there appears to be some evidence of variability
+#' across judges within each of the predictors, and the extent of this
+#' variability seems to differ depending on the predictor. For example, the
+#' predictor `sig_strikes_head_landed_diff` is statistically significant for
+#' all judges at the 5% level based on the confidence intervals and are positive
+#' which aligns with our expectations. Moreover, the coefficient estimates are 
+#' similar across the judges, with the exception of Marcos Rosales who seems to 
+#' place more weight on significant head strikes; however, the confidence 
+#' interval for Marcos Rosales overlaps with that of many other judges, 
+#' suggesting that this difference may not really be significant. On the other
+#' hand, there is substantially more variability in the marginal effects for
+#' `takedowns_landed_diff` across judges, with some like Adalaide Byrd,
+#' Ben Cartlidge, and David Lethaby showing evidence of differences in 
+#' takedowns landed not being significantly different from zero. There also may
+#' be pairwise statistical differences between judges such as Douglas Crosby
+#' and Chris Lee, though this would need more rigorous testing and corrections
+#' for multiple comparisons. A similar takeaway can be made for
+#' `control_time_seconds_diff`, where there almost seems to be a clustering of
+#' judges who value control time dominance more than others. This is rather
+#' interesting as there has long been a debate among MMA fans whether or not
+#' a fighter who is simply "controlling" a top position in grappling without 
+#' any accompanying effective strikes should be rewarded on the judge's
+#' scorecard.
+#' 
+#' Broadly, it seems like the marginal effects corresponding to striking-related 
+#' variables (`knockdowns_scored_diff`, `sig_strikes_head_landed_diff`, 
+#' `sig_strikes_body_landed_diff`, `sig_strikes_leg_landed_diff`, and 
+#' `total_strikes_landed_diff`) are more consistent across judges, whereas those
+#' of grappling-related variables (`control_time_seconds_diff`, 
+#' `reversals_scored_diff`, `submissions_attempted_diff`, and 
+#' `takedowns_landed_diff`) show more variability. A potential explanation for
+#' this may be due to the black-and-white nature of striking, since it is
+#' usually visually obvious how much impact a strike has on a fighter, either
+#' by looking at damage on the face or a clear physical indication of pain or
+#' discomfort. On the other hand, grappling is a world of subtleties and may
+#' be more open to personal interpretation with respect to how much the tide of
+#' a fight shifts with respect to those variables.
+#' 
+#' Since our data only contains judging information for fights that went the
+#' distance, we have no information on how judges' partial scorecards for fights
+#' that may have gone a few rounds before ending due to a knockout, submission,
+#' or medical injury. As a result, the variability that we are seeing in the
+#' marginal effects may be influenced by this sort of natural "selection" bias.
+#' This could especially be true with respect to what we observed in the
+#' grappling-specific variables, as some fights can be heavily grappling due
+#' to a matchup between one or more fighters with wrestling backgrounds, while
+#' others can be pure striking between kickboxers; in both of these cases,
+#' there will always be some kind of striking, but that isn't necessarily true
+#' for grappling.
 #' 
 #' 
 #' # Conclusion
+#' 
+#' In this case study, we examined how judges score rounds in UFC matches by 
+#' analyzing scoring data and fight statistics from multiple sources. The 
+#' project involved extensive data acquisition, cleaning, and merging to create 
+#' a comprehensive dataset, followed by exploratory and inferential analyses. 
+#' Key findings include the identification of significant relationships between 
+#' striking metrics and scoring patterns, as well as notable variability in how 
+#' judges weigh grappling metrics such as takedowns and control time. This 
+#' variability highlights the subjective nature of MMA judging, particularly for 
+#' scenarios with either extensive or limited grappling.
+#' 
+#' There are some interesting and natural extensions of this work that could be
+#' the basis of future research. For example, one could perform an even deeper
+#' dive into the analysis of variability across judges, testing for pairwise
+#' differences and connecting those findings regarding judge preferences to
+#' past fights by actually re-watching some of the fights, especially ones
+#' with controversial decisions or specific rounds where judges heavily
+#' disagreed. One could also augment our dataset by also considering partially 
+#' scored fights such as those found on the official UFC website [@scorecards], 
+#' although it isn't clear how one would systematically collect this information 
+#' since the scorecards are presented as images.
+#' 
+#' A major limitation of our analyses was the fact that the response variable
+#' `score_diff` was discrete and only took on 5 different values. Moreover, it
+#' isn't clear if scoring can be represented on a discrete scale with uniform
+#' gaps, since the conditions for scoring "10-8" rounds often requires a more
+#' stringent definition of "dominance." As such, it may be more appropriate to
+#' model the response as an ordinal variable and use something like an ordinal
+#' logistic or probit regression model, though at the cost of interpretability.
+#' Moreover, our data contains repeated measures since the values of our
+#' predictors are the same across all judges within the same round of the same
+#' fight, violating i.i.d. assumptions. As such, a hierarchical approach may
+#' also be a direction for investigation, whether that be through mixed effects
+#' or Bayesian modeling.
+#' 
 #' 
 #' \newpage
 #' # References

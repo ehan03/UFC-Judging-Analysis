@@ -12,7 +12,6 @@ This project was developed using R version 4.4.1.
     - `misc`: Contains bibliography BibTeX file and Jay's report template for reference.
 
 - R Scripts
-    - `00_install_packages.R`: Install all packages outside of base R used for this project.
     - `01_clean_ufcstats_data.R`: Clean the pre-collected UFC Stats data and persist to disk.
     - `02_scrape_mmadecisions.R`: Scrape MMA Decisions with some preliminary cleaning and formatting included and persist to disk.
     - `03_clean_mmadecisions_data.R`: Further clean the partially raw data from MMA Decisions, focusing on fighter information and deduplicating fighter IDs.

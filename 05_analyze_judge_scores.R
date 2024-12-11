@@ -130,11 +130,16 @@ autoplot(m1)
 
 
 # Linear regression + interactions for judges
+top_20_freq <- xf %>%
+  group_by(judge_name) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  as.data.frame() %>%
+  head(20)
+top_20_freq
+
 xf_sub <- xf %>%
-  filter(judge_name %in% c("Sal D'Amato", "Derek Cleary", "Chris Lee",
-                           "Michael Bell", "Junichiro Kamijo", "Eric Colón",
-                           "Tony Weeks", "Ron McCarthy", "Adalaide Byrd",
-                           "Ben Cartlidge")) %>%
+  filter(judge_name %in% top_20_freq$judge_name) %>%
   mutate(judge_name = factor(judge_name))
 
 m2 <- lm(score_diff ~ judge_name / knockdowns_scored_diff + 
@@ -162,15 +167,16 @@ plot_data <- model_results %>%
 
 # Create plot
 ggplot(plot_data, aes(x = estimate, y = Judge, color = Judge)) +
-  geom_point(size = 1.5) +  
+  geom_point(size = 1.2) +  
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0) +  
-  facet_wrap(~ Variable, ncol = 3, scales = "free_x") + 
+  facet_wrap(~ Variable, nrow = 3, scales = "free_x") + 
   theme_minimal() +
   scale_color_hue(h = c(180, 300)) + 
-  labs(title = "Marginal Effects of Fight Variables by Judge",
+  labs(title = "Marginal Effects of Fight Variables by Judge with 95% CIs",
        x = "Marginal Effect (Coefficient)",
        y = "Judge") +
-  theme(axis.text.y = element_text(size = 4),
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
         strip.text = element_text(size = 8),
         legend.position = "none")
 

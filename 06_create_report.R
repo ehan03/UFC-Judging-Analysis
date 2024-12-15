@@ -6,14 +6,17 @@
 #'            is often contentious due to subjective interpretations of scoring 
 #'            criteria. This project examines the relationship between fight 
 #'            statistics and round-level scoring, emphasizing variability across 
-#'            judges. By merging data from MMA Decisions and UFC Stats, the 
-#'            study identifies significant predictors of score differences, 
-#'            including striking and grappling metrics, and highlights notable 
-#'            discrepancies in how judges evaluate these factors. Unlike prior 
-#'            predictive modeling efforts, this work focuses on inferential 
-#'            analysis at the individual judge level, offering insights into 
-#'            scoring biases and variability, thereby contributing to the 
-#'            understanding of subjectivity in MMA judging."
+#'            judges. By merging data from MMA Decisions and UFC Stats and
+#'            constructing a pair of linear regression models, the study 
+#'            identifies significant predictors of score differences, including 
+#'            striking and grappling metrics, and highlights notable 
+#'            discrepancies in how judges evaluate these factors by examining
+#'            marginal effects when judge-level interaction terms are
+#'            introduced into the modeling. Unlike prior predictive modeling 
+#'            efforts, this work focuses on inferential analysis at the 
+#'            individual judge level, offering insights into scoring biases and 
+#'            variability, thereby contributing to the understanding of 
+#'            subjectivity in MMA judging."
 #' output: 
 #'   pdf_document:
 #'     number_sections: true
@@ -264,7 +267,7 @@ y %>%
 #' and the response. In the analysis section, we then fit two models: a baseline
 #' linear regression model on all of our observations to sanity check our
 #' engineered features, and a second linear regression on a subset (fight
-#' rounds that were scored by the top 10 judges with the most rounds scored)
+#' rounds that were scored by the top 20 judges with the most rounds scored)
 #' that includes interaction terms to try to tease out individual judge
 #' preferences.
 #' 
@@ -510,14 +513,14 @@ summary(m1)
 #' red corner landing one more additional strike on their opponent) is
 #' associated with an increase in the score difference between red and blue
 #' fighters by about 0.005 in favor of red. Since strike counts can rack up
-#' quickly during a round, this makes sense; only a total dominance via a
+#' quickly during a round, this makes sense; only total domination via a
 #' substantial gap in strikes landed would warrant consideration for scoring
 #' a round in favor of a "10-8" over a "10-9." On the other hand, an increase
 #' in `knockdowns_scored_diff` by 1 is associated with an increase in 
 #' `score_diff` by 0.394 when all other predictors are held fixed. Knockdowns
 #' are infrequent and only occur when a fighter lands a particularly devastating 
-#' strike, and so it is not surprising that this coefficient is so large 
-#' relative to that of other predictors.
+#' strike, and so it is not surprising that this coefficient has a large
+#' magnitude relative to that of other predictors.
 #' 
 #' With that being said, it's important to point out the obvious limitations of
 #' this model. In particular, our response `score_diff` is discrete and bounded
@@ -621,7 +624,7 @@ autoplot(m2)
 #' Next, we can use the `tidy` function from `broom` to extract out and
 #' tabularize the model coefficients along with the corresponding lower and
 #' upper endpoints of the 95% confidence intervals. We then filter for the
-#' marginal effects by looking for the presence of a `:` symbol and extract
+#' marginal effects by looking for the presence of a colon ("`:`") and extract
 #' out the judge name and feature name. The first several rows of this
 #' data frame are shown below.
 #' 
